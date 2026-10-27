@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      // Public can read only published projects
+      allow read: if resource.data.status == 'published' || isAdmin();
+      // Only authenticated admins can write
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Services collection
+    match /services/{serviceId} {
+      allow read: if resource.data.active == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Enquiries collection
+    match /enquiries/{enquiryId} {
+      // Public can submit an enquiry, but cannot read or update
+      allow create: if request.resource.data.fullName is string
+                    && request.resource.data.email is string
+                    && request.resource.data.phoneNumber is string
+                    && request.resource.data.status == 'New';
+      // Only admins can read, update status, add notes, or delete enquiries
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Testimonials collection
+    match /testimonials/{testimonialId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Site settings collection
+    match /siteSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin users collection
+    match /adminUsers/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if false; // Managed via server-side or Firebase console
+    }
+  }
+}
